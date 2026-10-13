@@ -3,6 +3,7 @@
 
 #include <tuple>
 #include <typeinfo>
+#include <type_traits>
 
 
 namespace pack_detail {
@@ -13,30 +14,37 @@ namespace pack_detail {
 
     // 1.2 return Args[QueryIndex]
     template <int QueryIndex, typename... Args>
-    struct _packIndexToType<QueryIndex, Args...> {
-        static_assert(QueryIndex >= 0, "Index must be nonnegative.");
-        static_assert(QueryIndex < packSize<Args...>, "Index larger than number of elements.");
-
-        using type = typename _packIndexToType<QueryIndex - 1, Args...>::type;
-    };
+    struct _packIndexToType;
 
     template <int QueryIndex, typename Arg1, typename... Args>
-    struct _packIndexToType<QueryIndex - 1, Arg1, Args...> {
-        using type = (QueryIndex == 0) ? typename Arg1::type
-                        : typename _packIndexToType<QueryIndex - 1, Args...>::type;
-    };
+    struct _packIndexToTypeHelper;
 
     template <int QueryIndex, typename... Args>
     using packIndexToType = typename _packIndexToType<QueryIndex, Args...>::type;
 
-    // 1.3 Store the first index at which QueryType occurs
-    template <typename QueryType, typename... Args>
-    constexpr int packTypeToIndex = _packTypeToIndex<0, QueryType, Args...>;
+    template <int QueryIndex, typename Arg1, typename... Args>
+    struct _packIndexToTypeHelper/*<QueryIndex, Arg1, Args...>*/ {
+        using type = std::conditional_t<QueryIndex == 0, typename Arg1::type,
+                                        typename _packIndexToTypeHelper<QueryIndex - 1, Args...>::type>;
+    };
 
+    template <int QueryIndex, typename... Args>
+    struct _packIndexToType/*<QueryIndex, Args...>*/ {
+        static_assert(QueryIndex >= 0, "Index must be nonnegative.");
+        static_assert(QueryIndex < packSize<Args...>, "Index larger than number of elements.");
+
+        using type = typename _packIndexToTypeHelper<QueryIndex - 1, Args...>::type;
+    };
+
+
+    // 1.3 Store the first index at which QueryType occurs
     template <int Accumulated, typename QueryType, typename... Args>
-    constexpr int _packTypeToIndex = (std::is_same<packIndexToType<Accumulated, Args...>, QueryType>) ? Accumulated
+    constexpr int _packTypeToIndex = (std::is_same_v<packIndexToType<Accumulated, Args...>(), QueryType>) ? Accumulated
                                         : (Accumulated >= packSize<Args...>) ? -1
                                         : _packTypeToIndex<Accumulated + 1, QueryType, Args...>;
+
+    template <typename QueryType, typename... Args>
+    constexpr int packTypeToIndex = _packTypeToIndex<0, QueryType, Args...>;
 
 } // pack_detail
 
